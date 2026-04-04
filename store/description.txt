@@ -1,0 +1,25 @@
+SHORT DESCRIPTION (≤132 chars)
+──────────────────────────────
+Click and drag to blur any area on any page. Click a blurred area to remove it. No data collected.
+
+LONG DESCRIPTION
+──────────────────────────────
+Blur Anything lets you instantly blur sensitive information on any webpage — usernames, balances, messages, addresses — before sharing your screen or taking a screenshot.
+
+HOW IT WORKS
+• Click the extension icon to enter blur mode (indigo border appears)
+• Click and drag over any area to blur it
+• Click a blurred area to remove it
+• Press Escape to exit blur mode
+
+USE CASES
+• Hide personal info during screen shares or recordings
+• Blur prices, balances, or account numbers before screenshots
+• Protect private messages or emails visible on screen
+• Anonymize content before sharing with colleagues
+
+PRIVACY
+Blur Anything collects zero data. No analytics, no tracking, no network requests. Everything happens locally in your browser. The extension only activates when you click the icon.
+
+PERMISSIONS
+• activeTab — needed to draw blur overlays on the current page. No other permissions requested.
