@@ -63,11 +63,23 @@ function disableBlurMode() {
 }
 
 // --- Scroll: reposition all overlays to stay locked to content ---
+// Uses anchor element's live getBoundingClientRect() so inner-div scrolls
+// (Gmail, Notion, etc.) work — not just window scroll.
 
 function onScroll() {
-  for (const { el, docX, docY } of overlays) {
-    el.style.left = docX - window.scrollX + "px";
-    el.style.top  = docY - window.scrollY + "px";
+  for (const o of overlays) {
+    let x, y;
+    if (o.anchor && o.anchor.isConnected) {
+      const r = o.anchor.getBoundingClientRect();
+      x = r.left + o.anchorOffsetX;
+      y = r.top  + o.anchorOffsetY;
+    } else {
+      // Fallback: anchor was removed from DOM (virtualised lists)
+      x = o.docX - window.scrollX;
+      y = o.docY - window.scrollY;
+    }
+    o.el.style.left = x + "px";
+    o.el.style.top  = y + "px";
   }
 }
 
@@ -165,6 +177,20 @@ function createBlurOverlay(viewX, viewY, w, h) {
   const docX = viewX + window.scrollX;
   const docY = viewY + window.scrollY;
 
+  // Find the DOM element at the centre of the selection to use as an anchor.
+  // Temporarily hide existing overlays so hit-testing looks through them.
+  overlays.forEach(o => { o.el.style.pointerEvents = "none"; });
+  const hit = document.elementFromPoint(viewX + w / 2, viewY + h / 2);
+  overlays.forEach(o => { o.el.style.pointerEvents = ""; });
+
+  let anchor = null, anchorOffsetX = 0, anchorOffsetY = 0;
+  if (hit && !hit.classList.contains("blur-anything-overlay")) {
+    anchor = hit;
+    const r = hit.getBoundingClientRect();
+    anchorOffsetX = viewX - r.left;
+    anchorOffsetY = viewY - r.top;
+  }
+
   const el = document.createElement("div");
   el.className = "blur-anything-overlay";
   Object.assign(el.style, {
@@ -185,11 +211,12 @@ function createBlurOverlay(viewX, viewY, w, h) {
   el.addEventListener("click", () => removeOverlay(el));
 
   document.body.appendChild(el);
-  overlays.push({ el, docX, docY, w, h });
+  overlays.push({ el, anchor, anchorOffsetX, anchorOffsetY, docX, docY, w, h });
 
-  // Attach scroll listener once, keep it alive as long as overlays exist
+  // Capture-phase listener on document catches scroll from ANY element
+  // (window scroll, Gmail's inner div, Notion panels, etc.)
   if (!scrollListenerActive) {
-    window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("scroll", onScroll, { passive: true, capture: true });
     scrollListenerActive = true;
   }
 }
@@ -201,7 +228,7 @@ function removeOverlay(el) {
 
   // No overlays left and blur mode is off — scroll listener no longer needed
   if (overlays.length === 0 && !blurMode) {
-    window.removeEventListener("scroll", onScroll);
+    document.removeEventListener("scroll", onScroll, { capture: true });
     scrollListenerActive = false;
   }
 }
