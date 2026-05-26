@@ -1,9 +1,16 @@
+// Guard against double-injection (manifest auto-inject + background fallback inject)
+if (window.__blurAnythingLoaded) {
+  // Already running — skip re-initialization, listener is already registered
+} else {
+window.__blurAnythingLoaded = true;
+
 let blurMode = false;
 let isDrawing = false;
 let startX = 0, startY = 0;
 let selectionEl = null;
 let injectedStyle = null;
 let modeIndicator = null;
+let modeBorder = null;
 const overlays = []; // { el, docX, docY, w, h }
 let scrollListenerActive = false;
 
@@ -30,17 +37,53 @@ function enableBlurMode() {
   `;
   document.head.appendChild(injectedStyle);
 
-  // Thin border signals blur mode is active
+  // Floating pill: primary blur-mode indicator
   modeIndicator = document.createElement("div");
   Object.assign(modeIndicator.style, {
     position: "fixed",
-    inset: "0",
-    border: "2px solid rgba(99,102,241,0.75)",
+    top: "16px",
+    left: "50%",
+    transform: "translateX(-50%) translateY(-6px)",
+    background: "rgba(10,10,60,0.88)",
+    color: "#fff",
+    borderRadius: "999px",
+    padding: "8px 16px",
+    fontSize: "12px",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+    fontWeight: "500",
+    lineHeight: "1",
+    letterSpacing: "0.01em",
+    whiteSpace: "nowrap",
+    backdropFilter: "blur(8px)",
+    webkitBackdropFilter: "blur(8px)",
+    border: "1px solid rgba(30,30,142,0.4)",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
     pointerEvents: "none",
     zIndex: "2147483645",
+    opacity: "0",
+    transition: "opacity 180ms ease-out, transform 180ms ease-out",
+  });
+  updatePillText();
+  document.body.appendChild(modeIndicator);
+  // Trigger slide-in animation (double rAF ensures transition fires on freshly inserted element)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (modeIndicator) {
+      modeIndicator.style.opacity = "1";
+      modeIndicator.style.transform = "translateX(-50%) translateY(0)";
+    }
+  }));
+
+  // Thin purple border: secondary blur-mode signal
+  modeBorder = document.createElement("div");
+  Object.assign(modeBorder.style, {
+    position: "fixed",
+    inset: "0",
+    border: "2px solid rgba(30,30,142,0.75)",
+    pointerEvents: "none",
+    zIndex: "2147483644",
     boxSizing: "border-box",
   });
-  document.body.appendChild(modeIndicator);
+  document.body.appendChild(modeBorder);
 
   document.addEventListener("mousedown", onMouseDown, true);
   document.addEventListener("mousemove", onMouseMove, true);
@@ -52,7 +95,8 @@ function disableBlurMode() {
   blurMode = false;
 
   injectedStyle?.remove();  injectedStyle = null;
-  modeIndicator?.remove(); modeIndicator = null;
+  modeIndicator?.remove();  modeIndicator = null;
+  modeBorder?.remove();     modeBorder = null;
   selectionEl?.remove();   selectionEl = null;
   isDrawing = false;
 
@@ -60,6 +104,15 @@ function disableBlurMode() {
   document.removeEventListener("mousemove", onMouseMove, true);
   document.removeEventListener("mouseup", onMouseUp, true);
   document.removeEventListener("keydown", onKeyDown, true);
+}
+
+// --- Pill text (context-aware) ---
+
+function updatePillText() {
+  if (!modeIndicator) return;
+  modeIndicator.textContent = overlays.length === 0
+    ? "Drag to blur  ·  Esc to exit"
+    : "Drag to blur  ·  Click any blur to remove  ·  Esc to exit";
 }
 
 // --- Scroll: reposition all overlays to stay locked to content ---
@@ -212,6 +265,7 @@ function createBlurOverlay(viewX, viewY, w, h) {
 
   document.body.appendChild(el);
   overlays.push({ el, anchor, anchorOffsetX, anchorOffsetY, docX, docY, w, h });
+  updatePillText();
 
   // Capture-phase listener on document catches scroll from ANY element
   // (window scroll, Gmail's inner div, Notion panels, etc.)
@@ -225,6 +279,7 @@ function removeOverlay(el) {
   const idx = overlays.findIndex(o => o.el === el);
   if (idx !== -1) overlays.splice(idx, 1);
   el.remove();
+  updatePillText();
 
   // No overlays left and blur mode is off — scroll listener no longer needed
   if (overlays.length === 0 && !blurMode) {
@@ -235,8 +290,17 @@ function removeOverlay(el) {
 
 // --- Message listener ---
 
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "toggle") {
     blurMode ? disableBlurMode() : enableBlurMode();
+    sendResponse({ ok: true });
+  } else if (msg.action === "getState") {
+    sendResponse({ blurMode, count: overlays.length });
+  } else if (msg.action === "clearAll") {
+    // Copy array first — removeOverlay mutates it via splice
+    [...overlays].forEach(o => removeOverlay(o.el));
+    sendResponse({ ok: true });
   }
 });
+
+} // end window.__blurAnythingLoaded guard

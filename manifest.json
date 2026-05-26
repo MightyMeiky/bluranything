@@ -3,7 +3,7 @@
   "name": "Blur Anything",
   "version": "1.0",
   "description": "Click and drag to blur any area on a page.",
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "scripting", "storage"],
   "background": {
     "service_worker": "background.js"
   },
@@ -20,6 +20,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
+    "default_popup": "popup.html",
     "default_title": "Blur Anything",
     "default_icon": {
       "16":  "icons/icon16.png",
